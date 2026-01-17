@@ -15,11 +15,18 @@ def download_videos(urls: list, output_folder: str):
     os.makedirs(output_folder, exist_ok=True)
 
     ydl_opts = {
-        "format": "best[ext=mp4]/best",  # Best quality mp4, fallback to best available
+        # Prefer non-HLS MP4/DASH to avoid SABR/HLS fragment issues
+        "format": "bestvideo[ext=mp4][protocol!=m3u8]+bestaudio[ext=m4a]/best[ext=mp4][protocol!=m3u8]/best",
         "outtmpl": os.path.join(output_folder, "%(title).200B.%(ext)s"),
         "quiet": False,
         "noprogress": False,
         "merge_output_format": "mp4",  # Ensure final output is mp4
+        # Workaround for YouTube SABR streaming: use Android client to get direct URLs
+        "extractor_args": {"youtube": {"player_client": ["android"]}},
+        # Be resilient to transient errors
+        "retries": 10,
+        "fragment_retries": 10,
+        "skip_unavailable_fragments": True,
     }
 
     print("=" * 60)

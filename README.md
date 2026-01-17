@@ -93,6 +93,10 @@ The application uses the following settings for best quality:
 - Verify the YouTube URL is correct and the video is available
 - Some videos may be restricted by geographic location or copyright
 - Try a different video URL to ensure the tool is working correctly
+ - If you see messages like:
+    - `Some web client https formats have been skipped as they are missing a url. YouTube is forcing SABR streaming for this client.`
+    - `fragment not found; Skipping fragment ...`
+    This is due to YouTube's SABR streaming for certain web clients. The downloader is configured to use the Android player client and avoid HLS formats, which resolves this. If issues persist, update `yt-dlp` and retry.
 
 ### Insufficient disk space
 - Ensure you have enough disk space for video downloads
