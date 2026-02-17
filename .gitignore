@@ -1,4 +1,8 @@
 /output
 /venv
 /temp_downloads
+/system
+cookies.txt
+__pycache__/
+*.pyc
 *.log

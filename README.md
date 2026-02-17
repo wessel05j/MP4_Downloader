@@ -1,114 +1,104 @@
-# YouTube to MP4 Downloader
+﻿# MP4 Downloader
 
-A simple Python application that downloads videos from YouTube in high-quality MP4 format.
+A YouTube-to-MP4 downloader with automatic cookie setup, high-quality format selection, and a cleaner terminal interface.
 
-## Features
+## What this version does
 
-- ✓ Download multiple YouTube videos at once
-- ✓ Download videos in best available MP4 quality
-- ✓ Automatic output folder creation
-- ✓ Easy-to-use command-line interface
-- ✓ Windows batch launcher included
+- Downloads all pasted YouTube video links in one run.
+- Chooses the highest quality stream available (video+audio) with fallback strategies.
+- Converts/merges to MP4 output.
+- Detects cookies automatically:
+  - `cookies.txt` (project root)
+  - `system/cookies.txt`
+  - browser cookies (`edge`, `chrome`, `firefox`, `brave`, `opera`, `vivaldi`)
+- Uses a one-command bootstrap flow via `run.bat` or `run.ps1`.
 
 ## Requirements
 
-Before using this tool, ensure you have the following installed:
+- Python 3.10+
+- ffmpeg in PATH (strongly recommended for reliable MP4 merging)
 
-1. **Python 3.7+** - Download from [python.org](https://www.python.org/)
+## Quick Start (Windows)
 
-### Quick Setup
+### Option 1: Double-click launcher
 
-The `launch.bat` file automatically handles Python package installation! It will:
-- Create a virtual environment (venv) if it doesn't exist
-- Install all required packages from `requirements.txt`
-- Run the MP4 downloader
+1. Open this folder.
+2. Double-click `run.bat`.
 
-### Manual Setup (Optional)
+### Option 2: PowerShell launcher
 
-If you prefer to set up manually without using the batch file:
-
-```bash
-# Create virtual environment
-python -m venv venv
-
-# Activate virtual environment (Windows)
-venv\Scripts\activate.bat
-
-# Install required packages
-pip install -r requirements.txt
-
-# Run the application
-python MP4.py
+```powershell
+.\run.ps1
 ```
+
+If execution policy blocks scripts, run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\run.ps1
+```
+
+## What the launchers do automatically
+
+On first run, they will:
+
+1. Create `venv` if missing.
+2. Activate the virtual environment.
+3. Install/update dependencies from `requirements.txt` through `setup_env.py`.
+4. Start `MP4.py`.
 
 ## Usage
 
-### Option 1: Using the Batch Launcher (Recommended)
-Double-click `launch.bat` to start the application.
+When the app starts:
 
-### Option 2: Using Command Prompt/PowerShell
-Navigate to the folder and run:
-```bash
-python MP4.py
+1. Paste YouTube links (one per line, space-separated, or comma-separated).
+2. Press Enter on an empty line.
+3. Confirm the queue and start download.
+4. Files are saved to `output/`.
+
+## Optional CLI usage
+
+```powershell
+python MP4.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 ```
 
-### Instructions
-
-1. When prompted, enter one or more YouTube links separated by commas
-2. Example:
-   ```
-   https://www.youtube.com/watch?v=dQw4w9WgXcQ, https://www.youtube.com/watch?v=jNQXAC9IVRw
-   ```
-3. Press Enter to start the download process
-4. The MP4 files will be saved in the `output` folder
-5. Press Enter again to exit the application
-
-## File Structure
-
-```
-MP4_Downloader/
-├── MP4.py                 # Main Python script
-├── launch.bat            # Windows batch launcher (handles venv setup)
-├── requirements.txt      # Python package dependencies
-├── README.md             # This file
-├── venv/                 # Virtual environment (created automatically)
-└── output/               # Output folder (created automatically)
+```powershell
+python MP4.py --links-file .\my_links.txt --no-confirm
 ```
 
-## Output Quality
+## Automatic cookie setup
 
-The application uses the following settings for best quality:
+No manual yt-dlp cookie flags are required.
 
-- **Video Download**: Best available MP4 format with highest resolution and quality
-- **Format**: MP4 (H.264 video with AAC audio when available)
+At startup, MP4 Downloader checks cookie sources in this order:
+
+1. `cookies.txt`
+2. `system/cookies.txt`
+3. browser cookies (`cookiesfrombrowser`)
+
+If no cookies are available, downloads still run, but some restricted/private videos may fail.
+
+## Output location
+
+- Video output: `output/`
+- Setup cache: `system/setup_state.json`
 
 ## Troubleshooting
 
-### yt-dlp not found
-- Run `pip install yt-dlp` to install the required package
-- Make sure you've run the `launch.bat` file at least once
+### Download fails on many links
 
-### Video download fails
-- Check that you have a stable internet connection
-- Verify the YouTube URL is correct and the video is available
-- Some videos may be restricted by geographic location or copyright
-- Try a different video URL to ensure the tool is working correctly
- - If you see messages like:
-    - `Some web client https formats have been skipped as they are missing a url. YouTube is forcing SABR streaming for this client.`
-    - `fragment not found; Skipping fragment ...`
-    This is due to YouTube's SABR streaming for certain web clients. The downloader is configured to use the Android player client and avoid HLS formats, which resolves this. If issues persist, update `yt-dlp` and retry.
+- Update dependencies by rerunning `run.bat`.
+- Make sure yt-dlp is current.
+- Retry with browser closed if cookie decryption fails.
 
-### Insufficient disk space
-- Ensure you have enough disk space for video downloads
-- Check the output folder and clear old files if needed
+### MP4 merging fails
 
-## Notes
+- Install ffmpeg and ensure `ffmpeg` is in PATH.
 
-- The output folder is created automatically if it doesn't exist
-- MP4 files are saved with the original video title
-- Videos are downloaded in the best available MP4 quality
-- Be mindful of copyright and only download content you have the right to download
+### No links detected
 
-## License
+- Paste full YouTube video URLs or valid 11-char video IDs.
 
-This tool is for personal use and educational purposes only. Users are responsible for respecting copyright and intellectual property rights.
+## Legal note
+
+Use this tool only for content you have rights to download.
