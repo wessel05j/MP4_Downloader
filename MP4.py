@@ -5,12 +5,13 @@ import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import parse_qs, urlparse
 
 import yt_dlp
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import BarColumn, Progress, TextColumn
 from rich.prompt import Confirm
 from rich.table import Table
 
@@ -442,11 +443,88 @@ def summarize_exception(exc: Exception) -> str:
     return first_line
 
 
-def download_video(url: str, cookie_source: CookieSource) -> DownloadResult:
+def format_bytes(value: Any) -> str:
+    size = _to_float(value)
+    if size <= 0:
+        return "0 B"
+    units = ("B", "KB", "MB", "GB", "TB")
+    unit_index = 0
+    while size >= 1024 and unit_index < len(units) - 1:
+        size /= 1024.0
+        unit_index += 1
+    if unit_index == 0:
+        return f"{int(size)} {units[unit_index]}"
+    return f"{size:.1f} {units[unit_index]}"
+
+
+def format_eta(seconds: Any) -> str:
+    eta = _to_int(seconds)
+    if eta <= 0:
+        return "-"
+    hours, remainder = divmod(eta, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours > 0:
+        return f"{hours:d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def create_progress_hook(progress: Progress, task_id: int, strategy_name: str) -> Callable[[Dict[str, Any]], None]:
+    def hook(data: Dict[str, Any]) -> None:
+        status = data.get("status")
+        if status == "downloading":
+            downloaded = _to_float(data.get("downloaded_bytes"))
+            total = _to_float(data.get("total_bytes") or data.get("total_bytes_estimate"))
+            speed_text = f"{format_bytes(data.get('speed'))}/s" if data.get("speed") else "-"
+            eta_text = format_eta(data.get("eta"))
+
+            if total > 0:
+                percent = min(100.0, (downloaded / total) * 100.0)
+                progress.update(
+                    task_id,
+                    total=total,
+                    completed=min(downloaded, total),
+                    description=f"[cyan]Downloading ({strategy_name})[/cyan]",
+                    percent=f"{percent:5.1f}%",
+                    speed=speed_text,
+                    eta=eta_text,
+                )
+            else:
+                progress.update(
+                    task_id,
+                    total=None,
+                    completed=0,
+                    description=f"[cyan]Downloading ({strategy_name}) {format_bytes(downloaded)}[/cyan]",
+                    percent="  ?  %",
+                    speed=speed_text,
+                    eta=eta_text,
+                )
+        elif status == "finished":
+            progress.update(
+                task_id,
+                description=f"[yellow]Download complete, merging ({strategy_name})...[/yellow]",
+                percent="100.0%",
+                speed="-",
+                eta="-",
+            )
+
+    return hook
+
+
+def download_video(url: str, cookie_source: CookieSource, progress: Progress, task_id: int) -> DownloadResult:
     before = snapshot_output_folder()
     last_error = "unknown download error"
 
     for strategy in download_strategies():
+        progress.update(
+            task_id,
+            total=100,
+            completed=0,
+            description=f"[cyan]Preparing strategy: {strategy['name']}[/cyan]",
+            percent="  0.0%",
+            speed="-",
+            eta="-",
+        )
+
         ydl_opts = dict(base_download_options())
         extractor_args = strategy.get("extractor_args")
         if extractor_args:
@@ -464,11 +542,31 @@ def download_video(url: str, cookie_source: CookieSource) -> DownloadResult:
             ydl_opts["format"] = selected_format
 
         strategy_name = f"{strategy['name']} | {format_strategy}"
+        ydl_opts["progress_hooks"] = [create_progress_hook(progress, task_id, strategy_name)]
+        progress.update(
+            task_id,
+            description=f"[cyan]Starting download ({strategy_name})[/cyan]",
+            percent="  0.0%",
+            speed="-",
+            eta="-",
+            total=100,
+            completed=0,
+        )
+
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
         except Exception as exc:
             last_error = summarize_exception(exc)
+            progress.update(
+                task_id,
+                description=f"[yellow]Retrying with next strategy after error: {last_error}[/yellow]",
+                percent="  0.0%",
+                speed="-",
+                eta="-",
+                total=100,
+                completed=0,
+            )
             continue
 
         new_files = find_new_video_files(before)
@@ -485,6 +583,15 @@ def download_video(url: str, cookie_source: CookieSource) -> DownloadResult:
         title = output_file.stem
         if isinstance(info, dict):
             title = str(info.get("title") or title)
+        progress.update(
+            task_id,
+            total=100,
+            completed=100,
+            description=f"[green]Finished: {output_file.name}[/green]",
+            percent="100.0%",
+            speed="-",
+            eta="-",
+        )
         return DownloadResult(
             url=url,
             success=True,
@@ -576,8 +683,25 @@ def run() -> int:
     results: List[DownloadResult] = []
     total = len(urls)
     for index, url in enumerate(urls, start=1):
-        with console.status(f"[bold cyan]Downloading {index}/{total}[/bold cyan]"):
-            result = download_video(url, cookie_source)
+        console.print(f"[bold]Video {index}/{total}[/bold] {url}")
+        with Progress(
+            TextColumn("{task.description}"),
+            BarColumn(bar_width=40),
+            TextColumn("[bold]{task.fields[percent]}[/bold]"),
+            TextColumn("speed: {task.fields[speed]}"),
+            TextColumn("eta: {task.fields[eta]}"),
+            console=console,
+            expand=True,
+        ) as progress:
+            task_id = progress.add_task(
+                "[cyan]Preparing...[/cyan]",
+                total=100,
+                completed=0,
+                percent="  0.0%",
+                speed="-",
+                eta="-",
+            )
+            result = download_video(url, cookie_source, progress, task_id)
         results.append(result)
         if result.success and result.output_file:
             console.print(f"[green]OK[/green] {result.title} -> {result.output_file.name}")
